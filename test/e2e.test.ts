@@ -80,12 +80,12 @@ describe('e2e', () => {
         stdio: ['ignore', 'pipe', 'pipe'],
       })
       // 以锁文件为真实 port/baseUrl 来源（Vite 若请求端口被占用会改用下一端口）
-      // 非 macOS（如 Linux CI）上 Vite 的 listening 回调更晚，需更长等待
+      // bun x vite 在 Linux 等环境下会先起父进程再起 Vite 子进程，锁文件里是子进程 pid，故不要求 lock.pid === proc.pid
       const lockDeadline = Date.now() + 25_000
       while (Date.now() < lockDeadline) {
         if (fs.existsSync(devLockPath)) {
           const lock = JSON.parse(fs.readFileSync(devLockPath, 'utf8')) as { pid?: number, port?: number, baseUrl?: string }
-          if (lock.pid === proc.pid && typeof lock.port === 'number' && lock.baseUrl) {
+          if (typeof lock.port === 'number' && lock.port > 0 && lock.baseUrl) {
             viteBaseUrl = String(lock.baseUrl).replace(/\/+$/, '')
             await waitForServer(viteBaseUrl)
             return
@@ -93,38 +93,7 @@ describe('e2e', () => {
         }
         await new Promise(r => setTimeout(r, 100))
       }
-      // 调试信息：便于在非 macOS 上排查“未写入”是路径、权限还是时序问题
-      const devDir = path.join(viteRoot, '.dev')
-      const devDirExists = fs.existsSync(devDir)
-      const lockFileExists = fs.existsSync(devLockPath)
-      const debug: Record<string, unknown> = {
-        platform: process.platform,
-        viteRoot: path.resolve(viteRoot),
-        devLockPath: path.resolve(devLockPath),
-        devDirExists,
-        lockFileExists,
-        spawnPid: proc.pid,
-        spawnCwd: viteRoot,
-        processCwd: process.cwd(),
-      }
-      if (devDirExists) {
-        try {
-          debug['.dev 目录内容'] = fs.readdirSync(devDir)
-        }
-        catch (e) {
-          debug['.dev readdir 异常'] = String(e)
-        }
-      }
-      if (lockFileExists) {
-        try {
-          debug['锁文件内容'] = JSON.parse(fs.readFileSync(devLockPath, 'utf8'))
-        }
-        catch (e) {
-          debug['锁文件读取异常'] = String(e)
-        }
-      }
-      console.error('[e2e 调试] 等锁文件超时:', debug)
-      throw new Error(`Vite 未在超时内写入 .dev/dev.lock.json。调试: ${JSON.stringify(debug, null, 2)}`)
+      throw new Error('Vite 未在超时内写入 .dev/dev.lock.json')
     }, 30_000)
 
     afterAll(() => proc.kill('SIGTERM'))
@@ -140,7 +109,9 @@ describe('e2e', () => {
     it('插件写入 .dev/dev.lock.json 且含 pid、port、baseUrl', async () => {
       expect(fs.existsSync(devLockPath)).toBe(true)
       const lock = JSON.parse(fs.readFileSync(devLockPath, 'utf8')) as { pid?: number, port?: number, baseUrl?: string }
-      expect(lock).toHaveProperty('pid', proc.pid)
+      expect(lock).toHaveProperty('pid')
+      expect(typeof lock.pid).toBe('number')
+      // bun x vite 下锁文件为子进程 pid，不一定等于 proc.pid
       expect(lock).toHaveProperty('port')
       expect(typeof lock.port).toBe('number')
       expect(lock.port).toBeGreaterThan(0)
