@@ -1,14 +1,14 @@
 import fs from 'node:fs'
-import path from 'node:path'
 import os from 'node:os'
+import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
+  fallbackBaseUrlAndPort,
+  isPidAlive,
   lockPaths,
+  readDevLockFile,
   readExistingLock,
   tryAcquireLockSync,
-  isPidAlive,
-  fallbackBaseUrlAndPort,
-  readDevLockFile,
 } from '../src/index'
 
 const tmpDir = path.join(os.tmpdir(), `unplugin-singleton-test-${Date.now()}`)
@@ -47,7 +47,10 @@ describe('tryAcquireLockSync', () => {
   const lockFile = path.join(tmpDir, 'acquire.lock.json')
 
   afterEach(() => {
-    try { fs.unlinkSync(lockFile) } catch { /* ignore */ }
+    try {
+      fs.unlinkSync(lockFile)
+    }
+    catch { /* ignore */ }
   })
 
   it('首次获取成功', () => {
@@ -91,7 +94,7 @@ describe('isPidAlive', () => {
     expect(isPidAlive(null)).toBe(false)
     expect(isPidAlive(undefined)).toBe(false)
     expect(isPidAlive(-1)).toBe(false)
-    expect(isPidAlive(NaN)).toBe(false)
+    expect(isPidAlive(Number.NaN)).toBe(false)
     expect(isPidAlive('')).toBe(false)
   })
 
@@ -113,7 +116,7 @@ describe('fallbackBaseUrlAndPort', () => {
     expect(r.baseUrl).toContain('5173')
   })
 
-  it('PORT 环境变量优先', () => {
+  it('pORT 环境变量优先', () => {
     const prev = process.env.PORT
     process.env.PORT = '4000'
     try {
@@ -121,7 +124,8 @@ describe('fallbackBaseUrlAndPort', () => {
       expect(r.port).toBe(4000)
     }
     finally {
-      if (prev !== undefined) process.env.PORT = prev
+      if (prev !== undefined)
+        process.env.PORT = prev
       else delete process.env.PORT
     }
   })
@@ -137,7 +141,10 @@ describe('readDevLockFile', () => {
   const devLockPath = path.join(projectRoot, '.dev', 'dev.lock.json')
 
   afterEach(() => {
-    try { fs.rmSync(path.join(projectRoot, '.dev'), { recursive: true }) } catch { /* ignore */ }
+    try {
+      fs.rmSync(path.join(projectRoot, '.dev'), { recursive: true })
+    }
+    catch { /* ignore */ }
   })
 
   it('文件不存在返回 null', () => {

@@ -1,6 +1,6 @@
 # unplugin-singleton
 
-[Unplugin](https://unplugin.unjs.io/) 约定：**单例** dev/preview，就绪后写入锁文件（`pid`、`port`、`baseUrl`），供 E2E、脚本读取。  
+[Unplugin](https://unplugin.unjs.io/) 约定：**单例** dev/preview，就绪后写入锁文件（`pid`、`port`、`baseUrl`），供 E2E、脚本读取。
 dev 与 preview 各一把锁，路径固定为项目 root 下的 `.dev/`。
 
 ## 安装

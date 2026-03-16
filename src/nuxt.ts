@@ -1,3 +1,4 @@
+import type { LockPayload } from './types'
 /**
  * Nuxt 模块：在 listen 时写入统一的 .dev/dev.lock.json（与 Vite 插件相同格式），
  * 关闭时删除。不注册 Vite 插件，逻辑完全在本模块内。
@@ -5,18 +6,19 @@
  */
 import fs from 'node:fs'
 import path from 'node:path'
-import pc from 'picocolors'
+import process from 'node:process'
 import { defineNuxtModule } from '@nuxt/kit'
+import pc from 'picocolors'
 import { NUXT_CONFIG_KEY, NUXT_MODULE_NAME } from './constants'
 import { ensureGitignoreDev } from './gitignore'
-import type { LockPayload } from './types'
 
 const DEV_LOCK_FILE = '.dev/dev.lock.json'
 
+const TRAILING_SLASHES_RE = /\/+$/
 function readExistingLock(lockFilePath: string): LockPayload | null {
   try {
     const raw = fs.readFileSync(lockFilePath, 'utf8')
-    const data = JSON.parse(raw) as { pid?: number; port?: number; baseUrl?: string }
+    const data = JSON.parse(raw) as { pid?: number, port?: number, baseUrl?: string }
     return data && typeof data.pid === 'number' && typeof data.port === 'number' && typeof data.baseUrl === 'string'
       ? { pid: data.pid, port: data.port, baseUrl: data.baseUrl }
       : null
@@ -27,7 +29,8 @@ function readExistingLock(lockFilePath: string): LockPayload | null {
 }
 
 function isPidAlive(pid: number): boolean {
-  if (pid <= 0) return false
+  if (pid <= 0)
+    return false
   try {
     process.kill(pid, 0)
     return true
@@ -50,9 +53,11 @@ function tryAcquireLockSync(lockFilePath: string, payload: LockPayload): boolean
   }
   catch (err: unknown) {
     const code = (err as NodeJS.ErrnoException).code
-    if (code !== 'EEXIST') throw err
+    if (code !== 'EEXIST')
+      throw err
     const existing = readExistingLock(lockFilePath)
-    if (!existing) return false
+    if (!existing)
+      return false
     if (existing.pid === process.pid) {
       try {
         fs.writeFileSync(lockFilePath, JSON.stringify(payload, null, 2), 'utf8')
@@ -62,7 +67,8 @@ function tryAcquireLockSync(lockFilePath: string, payload: LockPayload): boolean
         return false
       }
     }
-    if (isPidAlive(existing.pid)) return false
+    if (isPidAlive(existing.pid))
+      return false
     try {
       fs.unlinkSync(lockFilePath)
     }
@@ -80,7 +86,8 @@ function tryAcquireLockSync(lockFilePath: string, payload: LockPayload): boolean
       }
     }
     catch (err2: unknown) {
-      if ((err2 as NodeJS.ErrnoException).code !== 'EEXIST') return false
+      if ((err2 as NodeJS.ErrnoException).code !== 'EEXIST')
+        return false
       throw err2
     }
   }
@@ -89,7 +96,8 @@ function tryAcquireLockSync(lockFilePath: string, payload: LockPayload): boolean
 function removeLockFile(rootDir: string): void {
   const p = path.join(rootDir, DEV_LOCK_FILE)
   try {
-    if (fs.existsSync(p)) fs.unlinkSync(p)
+    if (fs.existsSync(p))
+      fs.unlinkSync(p)
   }
   catch {
     // ignore
@@ -107,7 +115,8 @@ export default defineNuxtModule({
     const lockPath = path.join(rootDir, DEV_LOCK_FILE)
 
     const writeLock = (port: number, baseUrl: string): void => {
-      if (!port || port <= 0 || port > 65535 || !baseUrl) return
+      if (!port || port <= 0 || port > 65535 || !baseUrl)
+        return
       const existing = readExistingLock(lockPath)
       if (existing && isPidAlive(existing.pid) && existing.pid !== process.pid) {
         const logger = (nuxt as { logger?: { info: (s: string) => void } }).logger
@@ -117,8 +126,9 @@ export default defineNuxtModule({
         process.exit(0)
       }
       const dir = path.dirname(lockPath)
-      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
-      const payload: LockPayload = { pid: process.pid, port, baseUrl: String(baseUrl).replace(/\/+$/, '') }
+      if (!fs.existsSync(dir))
+        fs.mkdirSync(dir, { recursive: true })
+      const payload: LockPayload = { pid: process.pid, port, baseUrl: String(baseUrl).replace(TRAILING_SLASHES_RE, '') }
       const acquired = tryAcquireLockSync(lockPath, payload)
       if (!acquired) {
         const logger = (nuxt as { logger?: { info: (s: string) => void } }).logger
@@ -127,18 +137,19 @@ export default defineNuxtModule({
       }
     }
 
-    const removeLock = () => removeLockFile(rootDir)
+    const removeLock = (): void => removeLockFile(rootDir)
 
-    nuxt.hook('listen', (_server: unknown, listener: unknown) => {
+    nuxt.hook('listen', (_server: unknown, listener: unknown): void => {
       const l = listener as Record<string, unknown> | undefined
-      const url: string | undefined =
-        typeof l?.url === 'string'
+      const url: string | undefined
+        = typeof l?.url === 'string'
           ? l.url
           : Array.isArray(l?.listeners) && l.listeners[0] && typeof (l.listeners[0] as Record<string, unknown>)?.url === 'string'
             ? (l.listeners[0] as { url: string }).url
             : Array.isArray(l?.urls) ? (l.urls[0] as string | undefined) : undefined
-      if (!url) return
-      const baseUrl = String(url).replace(/\/+$/, '')
+      if (!url)
+        return
+      const baseUrl = String(url).replace(TRAILING_SLASHES_RE, '')
       const parsed = baseUrl.startsWith('http') ? new URL(baseUrl) : new URL(`http://${baseUrl}`)
       const port = Number(parsed.port)
       writeLock(port, baseUrl)
@@ -149,8 +160,9 @@ export default defineNuxtModule({
     const maxWait = 25000
     const start = Date.now()
     const tid = setInterval(() => {
-      if (written) return
-      const dev = nuxt.options.devServer as { port?: number; host?: string; url?: string } | undefined
+      if (written)
+        return
+      const dev = nuxt.options.devServer as { port?: number, host?: string, url?: string } | undefined
       const port = dev?.port
       const host = dev?.host ?? 'localhost'
       const baseUrl = port && host ? `http://${host}:${port}` : (dev?.url ?? null)
