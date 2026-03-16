@@ -7,6 +7,7 @@ import pc from 'picocolors'
 import { createUnplugin } from 'unplugin'
 import type { LockPayload } from './types'
 import { PLUGIN_NAME } from './constants'
+import { ensureGitignoreDev } from './gitignore'
 
 /** 统一锁文件路径（Vite 与 Nuxt 均使用，格式一致） */
 const DEV_LOCK_FILE = '.dev/dev.lock.json'
@@ -265,7 +266,9 @@ function createPluginBody(): { name: string; configureServer: (server: ViteServe
   return {
     name: PLUGIN_NAME,
     configureServer(server) {
-      const { devLockPath } = lockPaths(server.config.root)
+      const root = server.config.root
+      ensureGitignoreDev(root)
+      const { devLockPath } = lockPaths(root)
       setupLockOnServer(server, devLockPath, 'dev')
     },
     configurePreviewServer(server) {

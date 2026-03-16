@@ -8,6 +8,7 @@ import path from 'node:path'
 import pc from 'picocolors'
 import { defineNuxtModule } from '@nuxt/kit'
 import { NUXT_CONFIG_KEY, NUXT_MODULE_NAME } from './constants'
+import { ensureGitignoreDev } from './gitignore'
 import type { LockPayload } from './types'
 
 const DEV_LOCK_FILE = '.dev/dev.lock.json'
@@ -102,6 +103,7 @@ export default defineNuxtModule({
   },
   setup(_options, nuxt) {
     const rootDir = nuxt.options.rootDir
+    ensureGitignoreDev(rootDir)
     const lockPath = path.join(rootDir, DEV_LOCK_FILE)
 
     const writeLock = (port: number, baseUrl: string): void => {

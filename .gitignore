@@ -68,6 +68,9 @@ typings/
 # nuxt.js build output
 .nuxt
 
+# unplugin-singleton 运行时锁文件
+.dev
+
 # Nuxt generate
 dist
 
