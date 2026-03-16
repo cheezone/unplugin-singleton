@@ -52,8 +52,8 @@ describe('e2e', () => {
         env: { ...process.env, PORT: String(NUXT_DEV_PORT), NUXT_PORT: String(NUXT_DEV_PORT) },
         stdio: ['ignore', 'pipe', 'pipe'],
       })
-      baseUrl = await waitForServer(`http://localhost:${NUXT_DEV_PORT}`, 10_000)
-    }, 12_000)
+      baseUrl = await waitForServer(`http://localhost:${NUXT_DEV_PORT}`)
+    }, 30_000)
 
     afterAll(() => proc.kill('SIGTERM'))
 
@@ -79,9 +79,10 @@ describe('e2e', () => {
         stdio: ['ignore', 'pipe', 'pipe'],
       })
       // 以锁文件为真实 port/baseUrl 来源（Vite 若请求端口被占用会改用下一端口）
+      // 非 macOS（如 Linux CI）上 Vite 的 listening 回调更晚，需更长等待
       const { readFileSync, existsSync } = await import('node:fs')
-      const deadline = Date.now() + 10_000
-      while (Date.now() < deadline) {
+      const lockDeadline = Date.now() + 25_000
+      while (Date.now() < lockDeadline) {
         if (existsSync(devLockPath)) {
           const lock = JSON.parse(readFileSync(devLockPath, 'utf8')) as { pid?: number, port?: number, baseUrl?: string }
           if (lock.pid === proc.pid && typeof lock.port === 'number' && lock.baseUrl) {
@@ -93,7 +94,7 @@ describe('e2e', () => {
         await new Promise(r => setTimeout(r, 100))
       }
       throw new Error('Vite 未在超时内写入 .dev/dev.lock.json')
-    }, 12_000)
+    }, 30_000)
 
     afterAll(() => proc.kill('SIGTERM'))
 
