@@ -68,6 +68,7 @@ describe('e2e', () => {
 
   describe('vite 环境', () => {
     let proc: ReturnType<typeof spawn>
+    let viteBaseUrl: string
     const viteRoot = path.join(rootDir, 'playground/vite')
     const devLockPath = path.join(viteRoot, '.dev', 'dev.lock.json')
 
@@ -77,13 +78,27 @@ describe('e2e', () => {
         env: process.env,
         stdio: ['ignore', 'pipe', 'pipe'],
       })
-      await waitForServer(`http://localhost:${VITE_DEV_PORT}`)
+      // 以锁文件为真实 port/baseUrl 来源（Vite 若请求端口被占用会改用下一端口）
+      const { readFileSync, existsSync } = await import('node:fs')
+      const deadline = Date.now() + 10_000
+      while (Date.now() < deadline) {
+        if (existsSync(devLockPath)) {
+          const lock = JSON.parse(readFileSync(devLockPath, 'utf8')) as { pid?: number, port?: number, baseUrl?: string }
+          if (lock.pid === proc.pid && typeof lock.port === 'number' && lock.baseUrl) {
+            viteBaseUrl = String(lock.baseUrl).replace(/\/+$/, '')
+            await waitForServer(viteBaseUrl)
+            return
+          }
+        }
+        await new Promise(r => setTimeout(r, 100))
+      }
+      throw new Error('Vite 未在超时内写入 .dev/dev.lock.json')
     }, 12_000)
 
     afterAll(() => proc.kill('SIGTERM'))
 
     it('首页有内容（含 app 挂载点）', async () => {
-      const res = await fetch(`http://localhost:${VITE_DEV_PORT}`)
+      const res = await fetch(viteBaseUrl)
       const html = await res.text()
       expect(res.ok).toBe(true)
       expect(html).toContain('id="app"')
@@ -93,11 +108,14 @@ describe('e2e', () => {
     it('插件写入 .dev/dev.lock.json 且含 pid、port、baseUrl', async () => {
       const { readFileSync, existsSync } = await import('node:fs')
       expect(existsSync(devLockPath)).toBe(true)
-      const lock = JSON.parse(readFileSync(devLockPath, 'utf8'))
+      const lock = JSON.parse(readFileSync(devLockPath, 'utf8')) as { pid?: number, port?: number, baseUrl?: string }
       expect(lock).toHaveProperty('pid', proc.pid)
-      expect(lock).toHaveProperty('port', VITE_DEV_PORT)
+      expect(lock).toHaveProperty('port')
+      expect(typeof lock.port).toBe('number')
+      expect(lock.port).toBeGreaterThan(0)
+      expect(lock.port).toBeLessThanOrEqual(65535)
       expect(lock).toHaveProperty('baseUrl')
-      expect(String(lock.baseUrl)).toContain(String(VITE_DEV_PORT))
+      expect(String(lock.baseUrl)).toContain(String(lock.port))
     })
   })
 })
