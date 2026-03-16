@@ -24,7 +24,7 @@ async function fetchWithTimeout(url: string, ms: number): Promise<Response | nul
 
 async function waitForServer(
   url: string,
-  timeout = 10_000,
+  timeout = 25_000,
   fallbackUrl?: string,
 ): Promise<string> {
   const start = Date.now()
