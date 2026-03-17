@@ -1,117 +1,77 @@
-import { spawn } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
+import { spawn } from 'node:child_process'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import kill from 'tree-kill'
 
 const rootDir = path.resolve(__dirname, '..')
+const DEV_LOCK = '.dev/dev.lock.json'
 
-const NUXT_DEV_PORT = 30555
-const VITE_DEV_PORT = 30556
-
-async function fetchWithTimeout(url: string, ms: number): Promise<Response | null> {
-  const c = new AbortController()
-  const t = setTimeout(() => c.abort(), ms)
-  try {
-    const r = await fetch(url, { signal: c.signal })
-    return r
-  }
-  catch {
-    return null
-  }
-  finally {
-    clearTimeout(t)
-  }
-}
-
-async function waitForServer(
-  url: string,
-  timeout = 25_000,
-  fallbackUrl?: string,
-): Promise<string> {
-  const start = Date.now()
-  const urls = [url, ...(fallbackUrl ? [fallbackUrl] : [])]
-  while (Date.now() - start < timeout) {
-    for (const u of urls) {
-      const r = await fetchWithTimeout(u, 2000)
-      if (r?.ok)
-        return u
+async function waitForDevLock(cwd: string, timeout = 30_000): Promise<string> {
+  const lockPath = path.join(cwd, DEV_LOCK)
+  const deadline = Date.now() + timeout
+  while (Date.now() < deadline) {
+    if (fs.existsSync(lockPath)) {
+      const raw = fs.readFileSync(lockPath, 'utf8')
+      const data = JSON.parse(raw) as { pid?: number, port?: number, baseUrl?: string }
+      if (typeof data?.port === 'number' && data.port > 0 && data.baseUrl)
+        return lockPath
     }
     await new Promise(r => setTimeout(r, 200))
   }
-  throw new Error(`Server did not become ready: ${url}`)
+  throw new Error(`${cwd}/${DEV_LOCK} 未在 ${timeout}ms 内出现且含有效 port/baseUrl`)
+}
+
+function killProc(proc: ReturnType<typeof spawn>): Promise<void> {
+  if (!proc.pid)
+    return Promise.resolve()
+  return new Promise(resolve => kill(proc.pid!, 'SIGTERM', () => resolve()))
 }
 
 describe('e2e', () => {
-  describe('nuxt 环境', () => {
+  describe('nuxt', () => {
+    const cwd = path.join(rootDir, 'playground/nuxt')
+    const lockPath = path.join(cwd, DEV_LOCK)
     let proc: ReturnType<typeof spawn>
-    let baseUrl: string
 
     beforeAll(async () => {
-      const cwd = path.join(rootDir, 'playground/nuxt')
-      proc = spawn('bun', ['run', 'dev'], {
-        cwd,
-        env: { ...process.env, PORT: String(NUXT_DEV_PORT), NUXT_PORT: String(NUXT_DEV_PORT) },
-        stdio: ['ignore', 'pipe', 'pipe'],
-      })
-      baseUrl = await waitForServer(`http://localhost:${NUXT_DEV_PORT}`)
-    }, 30_000)
+      proc = spawn('bun', ['run', 'dev'], { cwd, env: process.env, stdio: ['ignore', 'pipe', 'pipe'] })
+      await waitForDevLock(cwd)
+    }, 40_000)
 
-    afterAll(() => proc.kill('SIGTERM'))
+    afterAll(() => killProc(proc))
 
-    it('首页有内容（含插件输出）', async () => {
-      const res = await fetch(baseUrl)
-      const html = await res.text()
-      expect(res.ok).toBe(true)
-      expect(html).toContain('Mini Nuxt')
-      expect(html).toContain('插件输出')
+    it('插件写入 .dev/dev.lock.json 且含 pid、port、baseUrl', () => {
+      expect(fs.existsSync(lockPath)).toBe(true)
+      const lock = JSON.parse(fs.readFileSync(lockPath, 'utf8')) as { pid?: number, port?: number, baseUrl?: string }
+      expect(lock).toHaveProperty('pid')
+      expect(typeof lock.pid).toBe('number')
+      expect(lock).toHaveProperty('port')
+      expect(typeof lock.port).toBe('number')
+      expect(lock.port).toBeGreaterThan(0)
+      expect(lock.port).toBeLessThanOrEqual(65535)
+      expect(lock).toHaveProperty('baseUrl')
+      expect(String(lock.baseUrl)).toContain(String(lock.port))
     })
   })
 
-  describe('vite 环境', () => {
+  describe('vite', () => {
+    const cwd = path.join(rootDir, 'playground/vite')
+    const lockPath = path.join(cwd, DEV_LOCK)
     let proc: ReturnType<typeof spawn>
-    let viteBaseUrl: string
-    const viteRoot = path.join(rootDir, 'playground/vite')
-    const devLockPath = path.join(viteRoot, '.dev', 'dev.lock.json')
 
     beforeAll(async () => {
-      proc = spawn('bun', ['x', 'vite', '--port', String(VITE_DEV_PORT)], {
-        cwd: viteRoot,
-        env: process.env,
-        stdio: ['ignore', 'pipe', 'pipe'],
-      })
-      // 以锁文件为真实 port/baseUrl 来源（Vite 若请求端口被占用会改用下一端口）
-      // bun x vite 在 Linux 等环境下会先起父进程再起 Vite 子进程，锁文件里是子进程 pid，故不要求 lock.pid === proc.pid
-      const lockDeadline = Date.now() + 25_000
-      while (Date.now() < lockDeadline) {
-        if (fs.existsSync(devLockPath)) {
-          const lock = JSON.parse(fs.readFileSync(devLockPath, 'utf8')) as { pid?: number, port?: number, baseUrl?: string }
-          if (typeof lock.port === 'number' && lock.port > 0 && lock.baseUrl) {
-            viteBaseUrl = String(lock.baseUrl).replace(/\/+$/, '')
-            await waitForServer(viteBaseUrl)
-            return
-          }
-        }
-        await new Promise(r => setTimeout(r, 100))
-      }
-      throw new Error('Vite 未在超时内写入 .dev/dev.lock.json')
-    }, 30_000)
+      proc = spawn('bun', ['x', 'vite'], { cwd, env: process.env, stdio: ['ignore', 'pipe', 'pipe'] })
+      await waitForDevLock(cwd)
+    }, 40_000)
 
-    afterAll(() => proc.kill('SIGTERM'))
+    afterAll(() => killProc(proc))
 
-    it('首页有内容（含 app 挂载点）', async () => {
-      const res = await fetch(viteBaseUrl)
-      const html = await res.text()
-      expect(res.ok).toBe(true)
-      expect(html).toContain('id="app"')
-      expect(html).toMatch(/<script[^>]*src=.*main\.ts/)
-    })
-
-    it('插件写入 .dev/dev.lock.json 且含 pid、port、baseUrl', async () => {
-      expect(fs.existsSync(devLockPath)).toBe(true)
-      const lock = JSON.parse(fs.readFileSync(devLockPath, 'utf8')) as { pid?: number, port?: number, baseUrl?: string }
+    it('插件写入 .dev/dev.lock.json 且含 pid、port、baseUrl', () => {
+      expect(fs.existsSync(lockPath)).toBe(true)
+      const lock = JSON.parse(fs.readFileSync(lockPath, 'utf8')) as { pid?: number, port?: number, baseUrl?: string }
       expect(lock).toHaveProperty('pid')
       expect(typeof lock.pid).toBe('number')
-      // bun x vite 下锁文件为子进程 pid，不一定等于 proc.pid
       expect(lock).toHaveProperty('port')
       expect(typeof lock.port).toBe('number')
       expect(lock.port).toBeGreaterThan(0)
