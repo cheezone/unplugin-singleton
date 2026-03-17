@@ -1,8 +1,8 @@
+import { spawn } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
-import { spawn } from 'node:child_process'
-import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import kill from 'tree-kill'
+import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
 const rootDir = path.resolve(__dirname, '..')
 const DEV_LOCK = '.dev/dev.lock.json'
