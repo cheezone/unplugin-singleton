@@ -19,11 +19,11 @@ npm i -D unplugin-singleton
 
 ```js
 // vite.config.js / vite.config.ts
-import Singleton from 'unplugin-singleton/vite'
+import Singleton from 'unplugin-singleton/vite';
 
 export default defineConfig({
   plugins: [Singleton()],
-})
+});
 ```
 
 也可 `import p from 'unplugin-singleton'; plugins: [p.vite()]`。
@@ -58,7 +58,7 @@ Monorepo 下每个 app 用自己的 root，锁自然落在各自 root 的 `.dev/
 export default defineNuxtConfig({
   modules: ['unplugin-singleton/nuxt'],
   devServer: { port: 3200 }, // 可选，默认 3000
-})
+});
 ```
 
 模块在 `listen` 时写入**与 Vite 相同的** `.dev/dev.lock.json`（pid、port、baseUrl），关闭时删除。输出格式与 Vite 下一致，无 Nuxt 专用文件。
@@ -79,11 +79,11 @@ BASE_URL=$(node -e "console.log(JSON.parse(require('fs').readFileSync('.dev/prev
 
 ## 开发
 
-- 监听构建：`bun run dev`
-- 测试：`bun test`
-- 构建：`bun run build`
-- Vite playground：`bun play:vite`
-- Nuxt playground：`bun play:nuxt`
+- 监听构建：`vp run dev`
+- 测试：`vp test`
+- 构建：`vp run build`
+- Vite playground：`vp run play:vite`
+- Nuxt playground：`vp run play:nuxt`
 
 ## License
 

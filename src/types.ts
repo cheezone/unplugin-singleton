@@ -1,7 +1,7 @@
 export interface LockPayload {
-  pid: number
-  port: number
-  baseUrl: string
+  pid: number;
+  port: number;
+  baseUrl: string;
 }
 
 export interface Options {
