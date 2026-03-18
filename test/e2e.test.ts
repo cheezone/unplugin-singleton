@@ -7,7 +7,6 @@ import { afterAll, beforeAll, describe, expect, it } from 'vite-plus/test';
 const rootDir = path.resolve(__dirname, '..');
 const DEV_LOCK = '.dev/dev.lock.json';
 const vpBin = process.platform === 'win32' ? 'vp.cmd' : 'vp';
-const describeE2E = process.platform === 'win32' ? describe.skip : describe;
 
 async function waitForDevLock(cwd: string, timeout = 30_000): Promise<string> {
   const lockPath = path.join(cwd, DEV_LOCK);
@@ -28,6 +27,7 @@ function spawnVp(args: string[], cwd: string) {
     cwd,
     env: process.env,
     stdio: ['ignore', 'pipe', 'pipe'],
+    shell: process.platform === 'win32',
   });
 }
 
@@ -37,7 +37,7 @@ function killProc(proc: ReturnType<typeof spawn>): Promise<void> {
   return new Promise((resolve) => kill(proc.pid!, 'SIGTERM', () => resolve()));
 }
 
-describeE2E('e2e', () => {
+describe('e2e', () => {
   describe('nuxt', () => {
     const cwd = path.join(rootDir, 'playground/nuxt');
     const lockPath = path.join(cwd, DEV_LOCK);
