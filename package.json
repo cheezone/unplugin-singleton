@@ -1,6 +1,6 @@
 {
   "name": "unplugin-singleton",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Unplugin: 单例 dev/preview，就绪后写入锁文件供 E2E、脚本读取",
   "keywords": [
     "rollup",
