@@ -49,6 +49,8 @@ export default defineConfig({
 
 Monorepo 下每个 app 用自己的 root，锁自然落在各自 root 的 `.dev/` 下，无需额外配置。
 
+首次运行时会确保 **`<root>/.dev/.gitignore`** 为一行 `*`（忽略 `.dev` 下全部文件），**不会**修改项目根目录的 `.gitignore`。
+
 ## Nuxt
 
 子路径 `unplugin-singleton/nuxt`，只加 **modules** 即可（不注册 Vite 插件，逻辑在模块内完成）：

@@ -1,32 +1,22 @@
 /**
- * 在使用方项目根目录的 .gitignore 中追加 .dev（若尚未存在）。
+ * 在 `<root>/.dev/.gitignore` 写入 `*`，不修改项目根 `.gitignore`。
  */
 import fs from 'node:fs';
 import path from 'node:path';
 
-const GITIGNORE_ENTRY = '.dev';
-const COMMENT = '# unplugin-singleton';
+const CONTENT = '*\n';
 
-const LINE_SPLIT_RE = /\r?\n/;
-export function ensureGitignoreDev(rootDir: string): void {
-  const gitignorePath = path.join(rootDir, '.gitignore');
-  let content: string;
+export function ensureDevDirGitignore(rootDir: string): void {
+  const devDir = path.join(rootDir, '.dev');
+  const gitignorePath = path.join(devDir, '.gitignore');
   try {
-    content = fs.readFileSync(gitignorePath, 'utf8');
-  } catch {
-    content = '';
-  }
-  const lines = content.split(LINE_SPLIT_RE).map((line) => line.trim());
-  const hasDev = lines.some(
-    (line) => line === GITIGNORE_ENTRY || line === '.dev/' || line === '/.dev',
-  );
-  if (hasDev) return;
-  const addition =
-    content.length > 0 && !content.endsWith('\n')
-      ? `\n${COMMENT}\n${GITIGNORE_ENTRY}\n`
-      : `${COMMENT}\n${GITIGNORE_ENTRY}\n`;
-  try {
-    fs.appendFileSync(gitignorePath, addition);
+    try {
+      if (fs.readFileSync(gitignorePath, 'utf8') === CONTENT) return;
+    } catch {
+      // 文件不存在则继续写入
+    }
+    if (!fs.existsSync(devDir)) fs.mkdirSync(devDir, { recursive: true });
+    fs.writeFileSync(gitignorePath, CONTENT, 'utf8');
   } catch {
     // 无写权限或只读时忽略
   }

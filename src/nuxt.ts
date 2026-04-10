@@ -8,13 +8,53 @@ import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
 import { defineNuxtModule } from '@nuxt/kit';
-import pc from 'picocolors';
 import { NUXT_CONFIG_KEY, NUXT_MODULE_NAME } from './constants';
-import { ensureGitignoreDev } from './gitignore';
+import { ensureDevDirGitignore } from './gitignore';
 
 const DEV_LOCK_FILE = '.dev/dev.lock.json';
+const KILL_FLAGS = new Set(['-k', '--kill']);
 
 const TRAILING_SLASHES_RE = /\/+$/;
+type LoggerLike = { info?: (s: string) => void; warn?: (s: string) => void };
+
+function resolveLogger(nuxt: unknown): LoggerLike {
+  if (typeof nuxt !== 'object' || nuxt === null) return {};
+  const raw = (nuxt as { logger?: unknown }).logger;
+  if (!raw || typeof raw !== 'object') return {};
+  return raw as LoggerLike;
+}
+
+function logInfo(logger: LoggerLike, msg: string): void {
+  if (typeof logger.info === 'function') {
+    logger.info(msg);
+    return;
+  }
+  console.info(msg);
+}
+
+function logError(logger: LoggerLike, msg: string): void {
+  if (typeof logger.warn === 'function') {
+    logger.warn(msg);
+    return;
+  }
+  console.error(msg);
+}
+
+function hasKillFlag(): boolean {
+  return process.argv.some((arg) => KILL_FLAGS.has(arg));
+}
+
+function tryKillExistingPid(pid: number, logger: LoggerLike): boolean {
+  if (pid <= 0) return false;
+  try {
+    process.kill(pid, 'SIGTERM');
+    logInfo(logger, `[unplugin-singleton] 已执行 --kill：向旧实例发送 SIGTERM（pid=${pid}），正在接管。`);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function readExistingLock(lockFilePath: string): LockPayload | null {
   try {
     const raw = fs.readFileSync(lockFilePath, 'utf8');
@@ -99,18 +139,31 @@ export default defineNuxtModule({
   },
   setup(_options, nuxt) {
     const rootDir = nuxt.options.rootDir;
-    ensureGitignoreDev(rootDir);
+    const logger = resolveLogger(nuxt);
+    ensureDevDirGitignore(rootDir);
     const lockPath = path.join(rootDir, DEV_LOCK_FILE);
+    const existing = readExistingLock(lockPath);
+    if (existing && isPidAlive(existing.pid) && existing.pid !== process.pid) {
+      if (hasKillFlag() && tryKillExistingPid(existing.pid, logger)) {
+        // 继续启动，由后续写锁判断是否成功接管
+      } else {
+      logError(
+        logger,
+        `[unplugin-singleton] 该应用程序只允许同时运行一个 dev 实例。检测到已有实例正在运行（pid=${existing.pid}），当前进程已退出。若需接管，请在命令后追加 \`--kill\`（或 \`-k\`），例如：\`nuxt dev --kill\`。`,
+      );
+      process.exit(1);
+      }
+    }
 
     const writeLock = (port: number, baseUrl: string): void => {
       if (!port || port <= 0 || port > 65535 || !baseUrl) return;
       const existing = readExistingLock(lockPath);
       if (existing && isPidAlive(existing.pid) && existing.pid !== process.pid) {
-        const logger = (nuxt as { logger?: { info: (s: string) => void } }).logger;
-        logger?.info(
-          `  ${pc.green('➜')}  ${pc.bold('dev')} 已在运行 (pid ${existing.pid})，本次退出。${pc.cyan(existing.baseUrl ?? '')}`,
+        logError(
+          logger,
+          `[unplugin-singleton] 该应用程序只允许同时运行一个 dev 实例。检测到已有实例正在运行（pid=${existing.pid}），当前进程已退出。若需接管，请在命令后追加 \`--kill\`（或 \`-k\`），例如：\`nuxt dev --kill\`。`,
         );
-        process.exit(0);
+        process.exit(1);
       }
       const dir = path.dirname(lockPath);
       if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
@@ -121,9 +174,11 @@ export default defineNuxtModule({
       };
       const acquired = tryAcquireLockSync(lockPath, payload);
       if (!acquired) {
-        const logger = (nuxt as { logger?: { info: (s: string) => void } }).logger;
-        logger?.info(`  ${pc.green('➜')}  ${pc.bold('dev')} 锁被占用，本次退出。`);
-        process.exit(0);
+        logError(
+          logger,
+          '[unplugin-singleton] 该应用程序只允许同时运行一个 dev 实例。检测到实例锁已被占用，当前进程已退出。若需接管，请在命令后追加 `--kill`（或 `-k`），例如：`nuxt dev --kill`。',
+        );
+        process.exit(1);
       }
     };
 
@@ -148,29 +203,7 @@ export default defineNuxtModule({
       writeLock(port, baseUrl);
     });
 
-    let written = false;
-    const pollMs = 200;
-    const maxWait = 25000;
-    const start = Date.now();
-    const tid = setInterval(() => {
-      if (written) return;
-      const dev = nuxt.options.devServer as
-        | { port?: number; host?: string; url?: string }
-        | undefined;
-      const port = dev?.port;
-      const host = dev?.host ?? 'localhost';
-      const baseUrl = port && host ? `http://${host}:${port}` : (dev?.url ?? null);
-      if (port && baseUrl) {
-        written = true;
-        clearInterval(tid);
-        writeLock(port, baseUrl);
-      } else if (Date.now() - start > maxWait) {
-        clearInterval(tid);
-      }
-    }, pollMs);
-
     nuxt.hook('close', () => {
-      clearInterval(tid);
       removeLock();
     });
 

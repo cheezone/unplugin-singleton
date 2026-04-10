@@ -8,7 +8,7 @@ import process from 'node:process';
 import pc from 'picocolors';
 import { createUnplugin } from 'unplugin';
 import { PLUGIN_NAME } from './constants';
-import { ensureGitignoreDev } from './gitignore';
+import { ensureDevDirGitignore } from './gitignore';
 
 /** 统一锁文件路径（Vite 与 Nuxt 均使用，格式一致） */
 const DEV_LOCK_FILE = '.dev/dev.lock.json';
@@ -16,6 +16,24 @@ const DEV_LOCK_POLL_MS = 200;
 const DEV_LOCK_TIMEOUT_MS = 20000;
 
 const TRAILING_SLASHES_RE = /\/+$/;
+const KILL_FLAGS = new Set(['-k', '--kill']);
+
+function hasKillFlag(): boolean {
+  return process.argv.some((arg) => KILL_FLAGS.has(arg));
+}
+
+function tryKillExistingPid(pid: number, logger: { info: (s: string) => void; warn: (s: string) => void }): boolean {
+  if (pid <= 0) return false;
+  try {
+    process.kill(pid, 'SIGTERM');
+    logger.warn(
+      `[unplugin-singleton] 已执行 --kill：向旧实例发送 SIGTERM（pid=${pid}），正在接管。`,
+    );
+    return true;
+  } catch {
+    return false;
+  }
+}
 function isLoopback(address: string): boolean {
   return address === '::' || address === '0.0.0.0' || address === '::1' || address === '127.0.0.1';
 }
@@ -180,11 +198,15 @@ function setupLockOnServer(server: ViteServer, lockPath: string, serverLabel: st
   if (!httpServer) {
     const existing = readExistingLock(lockPath);
     if (existing && isPidAlive(existing.pid) && existing.pid !== process.pid) {
+      if (hasKillFlag() && tryKillExistingPid(existing.pid, logger)) {
+        // 继续向下走，由后续加锁逻辑决定是否成功接管
+      } else {
       const url = existing.baseUrl ?? '(unknown url)';
-      logger.info(
-        `  ${pc.green('➜')}  ${pc.bold(serverLabel)} 已在运行 (pid ${existing.pid})，本次退出。${pc.cyan(url)}`,
+      logger.warn(
+        `[unplugin-singleton] 该应用程序只允许同时运行一个 ${serverLabel} 实例。检测到已有实例正在运行（pid=${existing.pid}，url=${url}），当前进程已退出。若需接管，请在命令后追加 \`--kill\`（或 \`-k\`）。`,
       );
-      process.exit(0);
+      process.exit(1);
+      }
     }
     const root = server.config.root;
     const dir = path.dirname(lockPath);
@@ -192,8 +214,10 @@ function setupLockOnServer(server: ViteServer, lockPath: string, serverLabel: st
       if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
       const acquired = tryAcquireLockSync(lockPath, payload);
       if (!acquired) {
-        logger.info(`  ${pc.green('➜')}  ${pc.bold(serverLabel)} 锁被占用，本次退出。`);
-        process.exit(0);
+        logger.warn(
+          `[unplugin-singleton] 该应用程序只允许同时运行一个 ${serverLabel} 实例。检测到实例锁已被占用，当前进程已退出。若需接管，请在命令后追加 \`--kill\`（或 \`-k\`）。`,
+        );
+        process.exit(1);
       }
     };
     let settled = false;
@@ -227,11 +251,15 @@ function setupLockOnServer(server: ViteServer, lockPath: string, serverLabel: st
 
   const existing = readExistingLock(lockPath);
   if (existing && isPidAlive(existing.pid) && existing.pid !== process.pid) {
+    if (hasKillFlag() && tryKillExistingPid(existing.pid, logger)) {
+      // 继续向下走，由后续加锁逻辑决定是否成功接管
+    } else {
     const url = existing.baseUrl ?? '(unknown url)';
-    logger.info(
-      `  ${pc.green('➜')}  ${pc.bold(serverLabel)} 已在运行 (pid ${existing.pid})，本次退出。${pc.cyan(url)}`,
+    logger.warn(
+      `[unplugin-singleton] 该应用程序只允许同时运行一个 ${serverLabel} 实例。检测到已有实例正在运行（pid=${existing.pid}，url=${url}），当前进程已退出。若需接管，请在命令后追加 \`--kill\`（或 \`-k\`）。`,
     );
-    process.exit(0);
+    process.exit(1);
+    }
   }
 
   const onListening = (): void => {
@@ -246,8 +274,10 @@ function setupLockOnServer(server: ViteServer, lockPath: string, serverLabel: st
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
     const acquired = tryAcquireLockSync(lockPath, payload);
     if (!acquired) {
-      logger.info(`  ${pc.green('➜')}  ${pc.bold(serverLabel)} 锁被占用，本次退出。`);
-      process.exit(0);
+      logger.warn(
+        `[unplugin-singleton] 该应用程序只允许同时运行一个 ${serverLabel} 实例。检测到实例锁已被占用，当前进程已退出。若需接管，请在命令后追加 \`--kill\`（或 \`-k\`）。`,
+      );
+      process.exit(1);
     }
   };
 
@@ -272,12 +302,14 @@ function createPluginBody(): {
     name: PLUGIN_NAME,
     configureServer(server) {
       const root = server.config.root;
-      ensureGitignoreDev(root);
+      ensureDevDirGitignore(root);
       const { devLockPath } = lockPaths(root);
       setupLockOnServer(server, devLockPath, 'dev');
     },
     configurePreviewServer(server) {
-      const { previewLockPath } = lockPaths(server.config.root);
+      const root = server.config.root;
+      ensureDevDirGitignore(root);
+      const { previewLockPath } = lockPaths(root);
       setupLockOnServer(server, previewLockPath, 'preview');
     },
   };
