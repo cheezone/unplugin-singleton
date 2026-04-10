@@ -22,6 +22,30 @@ async function waitForDevLock(cwd: string, timeout = 30_000): Promise<string> {
   throw new Error(`${cwd}/${DEV_LOCK} 未在 ${timeout}ms 内出现且含有效 port/baseUrl`);
 }
 
+async function waitForLockPidChange(cwd: string, oldPid: number, timeout = 30_000): Promise<number> {
+  const lockPath = path.join(cwd, DEV_LOCK);
+  const deadline = Date.now() + timeout;
+  while (Date.now() < deadline) {
+    if (fs.existsSync(lockPath)) {
+      const raw = fs.readFileSync(lockPath, 'utf8');
+      const data = JSON.parse(raw) as { pid?: number };
+      if (typeof data.pid === 'number' && data.pid > 0 && data.pid !== oldPid) return data.pid;
+    }
+    await new Promise((r) => setTimeout(r, 200));
+  }
+  throw new Error(`锁文件 PID 未在 ${timeout}ms 内从 ${oldPid} 切换`);
+}
+
+function isPidAlive(pid: number): boolean {
+  if (!Number.isFinite(pid) || pid <= 0) return false;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function spawnVp(args: string[], cwd: string) {
   return spawn(vpBin, args, {
     cwd,
@@ -66,6 +90,38 @@ describe('e2e', () => {
       expect(lock).toHaveProperty('baseUrl');
       expect(String(lock.baseUrl)).toContain(String(lock.port));
     });
+  });
+
+  describe('nuxt --kill takeover', () => {
+    const cwd = path.join(rootDir, 'playground/nuxt');
+    const lockPath = path.join(cwd, DEV_LOCK);
+    let proc1: ReturnType<typeof spawn>;
+    let proc2: ReturnType<typeof spawn>;
+
+    afterAll(async () => {
+      await killProc(proc2);
+      await killProc(proc1);
+    });
+
+    it('第二个实例携带 --kill 时可接管并更新锁文件 pid', async () => {
+      proc1 = spawnVp(['exec', 'nuxt', 'dev', '--host', '127.0.0.1', '--port', '3011'], cwd);
+      await waitForDevLock(cwd, 40_000);
+      const lock1 = JSON.parse(fs.readFileSync(lockPath, 'utf8')) as { pid?: number };
+      expect(typeof lock1.pid).toBe('number');
+      const firstPid = lock1.pid as number;
+
+      proc2 = spawnVp(
+        ['exec', 'nuxt', 'dev', '--host', '127.0.0.1', '--port', '3011', '--kill'],
+        cwd,
+      );
+      const secondPid = await waitForLockPidChange(cwd, firstPid, 40_000);
+      expect(secondPid).not.toBe(firstPid);
+
+      // 允许系统信号传递有轻微延迟
+      await new Promise((r) => setTimeout(r, 400));
+      expect(isPidAlive(firstPid)).toBe(false);
+      expect(isPidAlive(secondPid)).toBe(true);
+    }, 70_000);
   });
 
   describe('vite', () => {
