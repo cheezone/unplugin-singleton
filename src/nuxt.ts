@@ -48,7 +48,10 @@ function tryKillExistingPid(pid: number, logger: LoggerLike): boolean {
   if (pid <= 0) return false;
   try {
     process.kill(pid, 'SIGTERM');
-    logInfo(logger, `[unplugin-singleton] 已执行 --kill：向旧实例发送 SIGTERM（pid=${pid}），正在接管。`);
+    logInfo(
+      logger,
+      `[unplugin-singleton] 已执行 --kill：向旧实例发送 SIGTERM（pid=${pid}），正在接管。`,
+    );
     return true;
   } catch {
     return false;
@@ -147,11 +150,11 @@ export default defineNuxtModule({
       if (hasKillFlag() && tryKillExistingPid(existing.pid, logger)) {
         // 继续启动，由后续写锁判断是否成功接管
       } else {
-      logError(
-        logger,
-        `[unplugin-singleton] 该应用程序只允许同时运行一个 dev 实例。检测到已有实例正在运行（pid=${existing.pid}），当前进程已退出。若需接管，请在命令后追加 \`--kill\`（或 \`-k\`），例如：\`nuxt dev --kill\`。`,
-      );
-      process.exit(1);
+        logError(
+          logger,
+          `[unplugin-singleton] 该应用程序只允许同时运行一个 dev 实例。检测到已有实例正在运行（pid=${existing.pid}），当前进程已退出。若需接管，请在命令后追加 \`--kill\`（或 \`-k\`），例如：\`nuxt dev --kill\`。`,
+        );
+        process.exit(1);
       }
     }
 

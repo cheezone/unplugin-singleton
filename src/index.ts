@@ -22,7 +22,10 @@ function hasKillFlag(): boolean {
   return process.argv.some((arg) => KILL_FLAGS.has(arg));
 }
 
-function tryKillExistingPid(pid: number, logger: { info: (s: string) => void; warn: (s: string) => void }): boolean {
+function tryKillExistingPid(
+  pid: number,
+  logger: { info: (s: string) => void; warn: (s: string) => void },
+): boolean {
   if (pid <= 0) return false;
   try {
     process.kill(pid, 'SIGTERM');
@@ -201,11 +204,11 @@ function setupLockOnServer(server: ViteServer, lockPath: string, serverLabel: st
       if (hasKillFlag() && tryKillExistingPid(existing.pid, logger)) {
         // 继续向下走，由后续加锁逻辑决定是否成功接管
       } else {
-      const url = existing.baseUrl ?? '(unknown url)';
-      logger.warn(
-        `[unplugin-singleton] 该应用程序只允许同时运行一个 ${serverLabel} 实例。检测到已有实例正在运行（pid=${existing.pid}，url=${url}），当前进程已退出。若需接管，请在命令后追加 \`--kill\`（或 \`-k\`）。`,
-      );
-      process.exit(1);
+        const url = existing.baseUrl ?? '(unknown url)';
+        logger.warn(
+          `[unplugin-singleton] 该应用程序只允许同时运行一个 ${serverLabel} 实例。检测到已有实例正在运行（pid=${existing.pid}，url=${url}），当前进程已退出。若需接管，请在命令后追加 \`--kill\`（或 \`-k\`）。`,
+        );
+        process.exit(1);
       }
     }
     const root = server.config.root;
@@ -254,11 +257,11 @@ function setupLockOnServer(server: ViteServer, lockPath: string, serverLabel: st
     if (hasKillFlag() && tryKillExistingPid(existing.pid, logger)) {
       // 继续向下走，由后续加锁逻辑决定是否成功接管
     } else {
-    const url = existing.baseUrl ?? '(unknown url)';
-    logger.warn(
-      `[unplugin-singleton] 该应用程序只允许同时运行一个 ${serverLabel} 实例。检测到已有实例正在运行（pid=${existing.pid}，url=${url}），当前进程已退出。若需接管，请在命令后追加 \`--kill\`（或 \`-k\`）。`,
-    );
-    process.exit(1);
+      const url = existing.baseUrl ?? '(unknown url)';
+      logger.warn(
+        `[unplugin-singleton] 该应用程序只允许同时运行一个 ${serverLabel} 实例。检测到已有实例正在运行（pid=${existing.pid}，url=${url}），当前进程已退出。若需接管，请在命令后追加 \`--kill\`（或 \`-k\`）。`,
+      );
+      process.exit(1);
     }
   }
 
