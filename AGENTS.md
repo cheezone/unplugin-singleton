@@ -1,5 +1,3 @@
-<!--VITE PLUS START-->
-
 # Using Vite+, the Unified Toolchain for the Web
 
 This project is using Vite+, a unified toolchain built on top of Vite, Rolldown, Vitest, tsdown, Oxlint, Oxfmt, and Vite Task. Vite+ wraps runtime management, package management, and frontend tooling in a single global CLI called `vp`. Vite+ is distinct from Vite, but it invokes Vite through `vp dev` and `vp build`.
@@ -71,6 +69,5 @@ These commands map to their corresponding tools. For example, `vp dev --port 300
 
 ## Review Checklist for Agents
 
-- [ ] Run `vp install` after pulling remote changes and before getting started.
-- [ ] Run `vp check` and `vp test` to validate changes.
-<!--VITE PLUS END-->
+- Run `vp install` after pulling remote changes and before getting started.
+- Run `vp check` and `vp test` to validate changes.

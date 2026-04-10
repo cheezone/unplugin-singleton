@@ -22,7 +22,11 @@ async function waitForDevLock(cwd: string, timeout = 30_000): Promise<string> {
   throw new Error(`${cwd}/${DEV_LOCK} 未在 ${timeout}ms 内出现且含有效 port/baseUrl`);
 }
 
-async function waitForLockPidChange(cwd: string, oldPid: number, timeout = 30_000): Promise<number> {
+async function waitForLockPidChange(
+  cwd: string,
+  oldPid: number,
+  timeout = 30_000,
+): Promise<number> {
   const lockPath = path.join(cwd, DEV_LOCK);
   const deadline = Date.now() + timeout;
   while (Date.now() < deadline) {
