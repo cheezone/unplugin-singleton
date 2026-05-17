@@ -17,6 +17,7 @@ const DEV_LOCK_TIMEOUT_MS = 20000;
 
 const TRAILING_SLASHES_RE = /\/+$/;
 const KILL_FLAGS = new Set(['-k', '--kill']);
+const URL_BOUNDARY_RE = /^(?:https?:\/\/|\(unknown url\)$)/;
 
 function hasKillFlag(): boolean {
   return process.argv.some((arg) => KILL_FLAGS.has(arg));
@@ -37,6 +38,10 @@ function tryKillExistingPid(
     return false;
   }
 }
+function formatTerminalUrl(url: string): string {
+  return URL_BOUNDARY_RE.test(url) ? ` ${url} ` : url;
+}
+
 function isLoopback(address: string): boolean {
   return address === '::' || address === '0.0.0.0' || address === '::1' || address === '127.0.0.1';
 }
@@ -206,7 +211,7 @@ function setupLockOnServer(server: ViteServer, lockPath: string, serverLabel: st
       } else {
         const url = existing.baseUrl ?? '(unknown url)';
         logger.warn(
-          `[unplugin-singleton] 该应用程序只允许同时运行一个 ${serverLabel} 实例。检测到已有实例正在运行（pid=${existing.pid}，url=${url}），当前进程已退出。若需接管，请在命令后追加 \`--kill\`（或 \`-k\`）。`,
+          `[unplugin-singleton] 该应用程序只允许同时运行一个 ${serverLabel} 实例。检测到已有实例正在运行（pid=${existing.pid}，url=${formatTerminalUrl(url)}），当前进程已退出。若需接管，请在命令后追加 \`--kill\`（或 \`-k\`）。`,
         );
         process.exit(1);
       }
@@ -259,7 +264,7 @@ function setupLockOnServer(server: ViteServer, lockPath: string, serverLabel: st
     } else {
       const url = existing.baseUrl ?? '(unknown url)';
       logger.warn(
-        `[unplugin-singleton] 该应用程序只允许同时运行一个 ${serverLabel} 实例。检测到已有实例正在运行（pid=${existing.pid}，url=${url}），当前进程已退出。若需接管，请在命令后追加 \`--kill\`（或 \`-k\`）。`,
+        `[unplugin-singleton] 该应用程序只允许同时运行一个 ${serverLabel} 实例。检测到已有实例正在运行（pid=${existing.pid}，url=${formatTerminalUrl(url)}），当前进程已退出。若需接管，请在命令后追加 \`--kill\`（或 \`-k\`）。`,
       );
       process.exit(1);
     }
@@ -326,6 +331,7 @@ export const unplugin = /* #__PURE__ */ createUnplugin(unpluginFactory);
 
 export {
   fallbackBaseUrlAndPort,
+  formatTerminalUrl,
   isPidAlive,
   lockPaths,
   readDevLockFile,

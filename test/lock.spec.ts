@@ -4,6 +4,7 @@ import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   fallbackBaseUrlAndPort,
+  formatTerminalUrl,
   isPidAlive,
   lockPaths,
   readDevLockFile,
@@ -12,6 +13,21 @@ import {
 } from '../src/index';
 
 const tmpDir = path.join(os.tmpdir(), `unplugin-singleton-test-${Date.now()}`);
+
+
+describe('formatTerminalUrl', () => {
+  it('给 URL 前后加空格，确保终端可点击', () => {
+    expect(formatTerminalUrl('http://localhost:5173')).toBe(' http://localhost:5173 ');
+    expect(formatTerminalUrl('https://web.vibe-plus.localhost')).toBe(
+      ' https://web.vibe-plus.localhost ',
+    );
+  });
+
+  it('非 URL 文案保持不变', () => {
+    expect(formatTerminalUrl('(unknown url)')).toBe(' (unknown url) ');
+    expect(formatTerminalUrl('localhost:5173')).toBe('localhost:5173');
+  });
+});
 
 describe('lockPaths', () => {
   it('返回 .dev 下的 dev 与 preview 锁路径', () => {

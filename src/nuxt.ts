@@ -13,6 +13,7 @@ import { ensureDevDirGitignore } from './gitignore';
 
 const DEV_LOCK_FILE = '.dev/dev.lock.json';
 const KILL_FLAGS = new Set(['-k', '--kill']);
+const URL_BOUNDARY_RE = /^(?:https?:\/\/|\(unknown url\)$)/;
 
 const TRAILING_SLASHES_RE = /\/+$/;
 type LoggerLike = { info?: (s: string) => void; warn?: (s: string) => void };
@@ -38,6 +39,10 @@ function logError(logger: LoggerLike, msg: string): void {
     return;
   }
   console.error(msg);
+}
+
+function formatTerminalUrl(url: string): string {
+  return URL_BOUNDARY_RE.test(url) ? ` ${url} ` : url;
 }
 
 function hasKillFlag(): boolean {
@@ -152,7 +157,7 @@ export default defineNuxtModule({
       } else {
         logError(
           logger,
-          `[unplugin-singleton] 该应用程序只允许同时运行一个 dev 实例。检测到已有实例正在运行（pid=${existing.pid}），当前进程已退出。若需接管，请在命令后追加 \`--kill\`（或 \`-k\`），例如：\`nuxt dev --kill\`。`,
+          `[unplugin-singleton] 该应用程序只允许同时运行一个 dev 实例。检测到已有实例正在运行（pid=${existing.pid}，url=${formatTerminalUrl(existing.baseUrl ?? '(unknown url)')}），当前进程已退出。若需接管，请在命令后追加 \`--kill\`（或 \`-k\`），例如：\`nuxt dev --kill\`。`,
         );
         process.exit(1);
       }
@@ -164,7 +169,7 @@ export default defineNuxtModule({
       if (existing && isPidAlive(existing.pid) && existing.pid !== process.pid) {
         logError(
           logger,
-          `[unplugin-singleton] 该应用程序只允许同时运行一个 dev 实例。检测到已有实例正在运行（pid=${existing.pid}），当前进程已退出。若需接管，请在命令后追加 \`--kill\`（或 \`-k\`），例如：\`nuxt dev --kill\`。`,
+          `[unplugin-singleton] 该应用程序只允许同时运行一个 dev 实例。检测到已有实例正在运行（pid=${existing.pid}，url=${formatTerminalUrl(existing.baseUrl ?? '(unknown url)')}），当前进程已退出。若需接管，请在命令后追加 \`--kill\`（或 \`-k\`），例如：\`nuxt dev --kill\`。`,
         );
         process.exit(1);
       }
